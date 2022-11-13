@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using Lucene.Net.Documents;
+using Lucene.Net.Index;
+using System.Diagnostics;
 
 namespace Taffy.Lib {
   public class FolderMonitor {
@@ -9,7 +11,8 @@ namespace Taffy.Lib {
       set { _watcher.EnableRaisingEvents = value; }
     }
 
-    FileSystemWatcher _watcher;
+    readonly FileSystemWatcher _watcher;
+    readonly Stopwatch _stopwatch = new Stopwatch();
 
     public FolderMonitor(string path) {
       Path = path;
@@ -31,33 +34,37 @@ namespace Taffy.Lib {
 
     #region Public APIs
     public async Task Scan() {
-      Stopwatch sw = new Stopwatch();
-      sw.Start();
-      var metas = await Task.Run(() => WalkFiles());
-      sw.Stop();
-      foreach (var meta in metas) {
-        Console.WriteLine($"[{meta.Ext}] {meta.FullName}");
+      var files = await Task.Run(() => WalkFiles());
+      Console.WriteLine($"{files.Count()} files found");
+      using var indexer = new FileIndexer();
+      using var writer = indexer.NewWriter();
+      foreach (var f in files) {
+        var doc = new FileDocument(f);
+        doc.Write(writer);
       }
-      Console.WriteLine($"[DEBUG] time elapsed: {sw.ElapsedMilliseconds}ms");
+      writer.Commit();
+      writer.Dispose();
     }
     #endregion
 
     #region File system operations
-    IEnumerable<FileMeta> WalkFiles() {
-
+    IEnumerable<FileInfo> WalkFiles() {
+      _stopwatch.Restart();
       var di = new DirectoryInfo(Path);
       if (!di.Exists) yield break;
 
-      var fsis = di.EnumerateFileSystemInfos("*.*", new EnumerationOptions() {
+      var enumOpts = new EnumerationOptions() {
         MatchType = MatchType.Simple,
         RecurseSubdirectories = true,
-      });
-      foreach (var fsi in fsis) {
-        if (fsi.Exists) {
-          var meta = new FileMeta(fsi.FullName) { Ext = fsi.Extension, LastUpdated = fsi.LastWriteTimeUtc, LastAccessed = fsi.LastAccessTimeUtc };
-          yield return meta;
+      };
+      var files = di.EnumerateFiles("*.*", enumOpts);
+      foreach (var f in files) {
+        if (f != null && f.Exists) {
+          yield return f;
         }
       }
+      _stopwatch.Stop();
+      Console.WriteLine($"[DEBUG] scan all files time elapsed: {_stopwatch.ElapsedMilliseconds}ms");
     }
     #endregion
 
@@ -98,4 +105,14 @@ namespace Taffy.Lib {
     public DateTime LastUpdated { get; init; }
     public DateTime LastAccessed { get; init; }
   };
+
+  public record FileDocument(FileInfo f) {
+    public void Write(IndexWriter w) {
+      var doc = new Document();
+      doc.Add(new StringField("fullname", f.FullName, Field.Store.YES));
+      doc.Add(new TextField("name", f.Name, Field.Store.YES));
+      w.AddDocument(doc);
+    }
+
+  }
 }
