@@ -3,29 +3,33 @@ using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 
+using LuceneDirectory = Lucene.Net.Store.Directory;
+
 namespace Taffy.Lib {
-  internal class FileIndexer : IDisposable {
+  internal class FileIndexer {
     const LuceneVersion VER = LuceneVersion.LUCENE_48;
-    const string INDEX_NAME = "taffy/file_index";
-    static readonly string INDEX_PATH = Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), INDEX_NAME);
 
-    Lucene.Net.Store.Directory? _dir;
+    internal string? FolderPath { get; set; }
 
-    public void Dispose() {
-      _dir?.Dispose();
-      _dir = null;
+    internal string? IndexPath => !string.IsNullOrWhiteSpace(FolderPath) ? Path.Combine(FolderPath, ".taffy", "index") : null;
+
+    internal FileIndexer(string path) {
+      FolderPath = path;
     }
 
-    public IndexWriter NewWriter() {
-      Dispose();
+    public LuceneDirectory Open() {
+      if (IndexPath == null)
+        throw new InvalidOperationException("must specify a folder to index.");
 
-      Console.WriteLine(INDEX_PATH);
-      _dir = FSDirectory.Open(INDEX_PATH);
+      Console.WriteLine(IndexPath);
+      return FSDirectory.Open(IndexPath);
+    }
+
+    public IndexWriter NewWriter(LuceneDirectory dir) {
       var analyzer = new CJKAnalyzer(VER);
       var config = new IndexWriterConfig(VER, analyzer);
       config.OpenMode = OpenMode.CREATE;
-      return new IndexWriter(_dir, config);
+      return new IndexWriter(dir, config);
     }
   }
 }

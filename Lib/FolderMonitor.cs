@@ -5,17 +5,28 @@ using System.Diagnostics;
 namespace Taffy.Lib {
   public class FolderMonitor {
 
-    public string Path { get; private set; }
+    string? _path;
+    public string? Path {
+      get => _path;
+      set {
+        _path = value;
+        if (_indexer != null) _indexer.FolderPath = _path;
+      }
+    }
     public bool Enable {
       get { return _watcher.EnableRaisingEvents; }
       set { _watcher.EnableRaisingEvents = value; }
     }
 
     readonly FileSystemWatcher _watcher;
+
     readonly Stopwatch _stopwatch = new Stopwatch();
+    FileIndexer _indexer;
 
     public FolderMonitor(string path) {
-      Path = path;
+      _path = path;
+      _indexer = new FileIndexer(_path);
+
       _watcher = new FileSystemWatcher(path, "*.*") {
         IncludeSubdirectories = true,
         NotifyFilter = NotifyFilters.FileName |
@@ -34,23 +45,24 @@ namespace Taffy.Lib {
 
     #region Public APIs
     public async Task Scan() {
+      if (Path == null) return;
+
       var files = await Task.Run(() => WalkFiles());
       Console.WriteLine($"{files.Count()} files found");
-      using var indexer = new FileIndexer();
-      using var writer = indexer.NewWriter();
+      using var dir = _indexer.Open();
+      using var writer = _indexer.NewWriter(dir);
       foreach (var f in files) {
         var doc = new FileDocument(f);
         doc.Write(writer);
       }
       writer.Commit();
-      writer.Dispose();
     }
     #endregion
 
     #region File system operations
     IEnumerable<FileInfo> WalkFiles() {
       _stopwatch.Restart();
-      var di = new DirectoryInfo(Path);
+      var di = new DirectoryInfo(Path!);
       if (!di.Exists) yield break;
 
       var enumOpts = new EnumerationOptions() {
