@@ -1,5 +1,7 @@
-﻿using Lucene.Net.Documents;
+﻿using J2N;
+using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.Search;
 using System.Diagnostics;
 
 namespace Taffy.Lib {
@@ -13,6 +15,7 @@ namespace Taffy.Lib {
     readonly FileSystemWatcher _watcher;
 
     readonly Stopwatch _stopwatch = new Stopwatch();
+    bool _initialized = false;
 
     public FolderMonitor(string path) {
       Path = path;
@@ -35,16 +38,32 @@ namespace Taffy.Lib {
 
     #region Public APIs
     public async Task Scan() {
+      _initialized = false;
       if (Path == null) return;
 
       var files = await Task.Run(() => WalkFiles());
       Console.WriteLine($"{files.Count()} files found");
-      using var indexer = new FileIndexer(Path);
+      using var indexer = new FileIndexer(Path, reset: true);
       foreach (var f in files) {
         var doc = new FileDocument(f);
         doc.Write(indexer.Writer);
       }
       indexer.Commit();
+      _initialized = true;
+    }
+
+    public IEnumerable<FileInfo> Search(params string[] terms) {
+      if (!_initialized)
+        throw new MonitorNotInitializedException(this);
+
+      var query = new TermQuery(new Term("name", string.Join(" ", terms.Select(t => t.ToLower()))));
+      Console.WriteLine($"search query: {query}");
+      using var indexer = new FileIndexer(Path);
+      var result = indexer.Searcher.Search(query, 20);
+      var count = result.TotalHits;
+      for (int i = 0; i < count; i++) {
+        yield return new FileInfo(indexer.Searcher.Doc(result.ScoreDocs[i].Doc).Get("fullname"));
+      }
     }
     #endregion
 
@@ -65,7 +84,7 @@ namespace Taffy.Lib {
         }
       }
       _stopwatch.Stop();
-      Console.WriteLine($"[DEBUG] scan all files time elapsed: {_stopwatch.ElapsedMilliseconds}ms");
+      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] scan all files time elapsed: {_stopwatch.ElapsedMilliseconds}ms");
     }
     #endregion
 
@@ -111,9 +130,14 @@ namespace Taffy.Lib {
     public void Write(IndexWriter w) {
       var doc = new Document();
       doc.Add(new StringField("fullname", f.FullName, Field.Store.YES));
-      doc.Add(new TextField("name", f.Name, Field.Store.YES));
+      doc.Add(new TextField("name", Path.GetFileNameWithoutExtension(f.Name), Field.Store.YES));
+      doc.Add(new StringField("ext", f.Extension, Field.Store.YES));
       w.AddDocument(doc);
     }
 
+  }
+
+  public class MonitorNotInitializedException : Exception {
+    public MonitorNotInitializedException(FolderMonitor monitor) : base(monitor.Path) { }
   }
 }

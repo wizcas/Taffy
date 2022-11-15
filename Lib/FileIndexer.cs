@@ -22,11 +22,11 @@ namespace Taffy.Lib {
     internal IndexWriter Writer => _writer;
     internal IndexSearcher Searcher => _searcher;
 
-    internal FileIndexer(string path) {
+    internal FileIndexer(string path, bool reset = false) {
       FolderPath = path;
       var analyzer = new CJKAnalyzer(VER);
       var config = new IndexWriterConfig(VER, analyzer);
-      config.OpenMode = OpenMode.CREATE;
+      config.OpenMode = reset ? OpenMode.CREATE : OpenMode.CREATE_OR_APPEND;
 
       _dir = Open();
       _writer = new IndexWriter(_dir, config);
@@ -41,8 +41,6 @@ namespace Taffy.Lib {
     LuceneDirectory Open() {
       if (IndexPath == null)
         throw new InvalidOperationException("must specify a folder to index.");
-
-      Console.WriteLine(IndexPath);
       return FSDirectory.Open(IndexPath);
     }
 
