@@ -14,7 +14,6 @@ namespace Taffy.Lib {
 
     readonly FileSystemWatcher _watcher;
 
-    readonly Stopwatch _stopwatch = new Stopwatch();
     bool _initialized = false;
 
     public FolderMonitor(string path) {
@@ -56,20 +55,22 @@ namespace Taffy.Lib {
       if (!_initialized)
         throw new MonitorNotInitializedException(this);
 
+      var sw = Stopwatch.StartNew();
       var query = new TermQuery(new Term("name", string.Join(" ", terms.Select(t => t.ToLower()))));
-      Console.WriteLine($"search query: {query}");
       using var indexer = new FileIndexer(Path);
       var result = indexer.Searcher.Search(query, 20);
       var count = result.TotalHits;
       for (int i = 0; i < count; i++) {
         yield return new FileInfo(indexer.Searcher.Doc(result.ScoreDocs[i].Doc).Get("fullname"));
       }
+      sw.Stop();
+      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] search for \"{query}\" takes: {sw.ElapsedMilliseconds} ms");
     }
     #endregion
 
     #region File system operations
     IEnumerable<FileInfo> WalkFiles() {
-      _stopwatch.Restart();
+      var sw = Stopwatch.StartNew();
       var di = new DirectoryInfo(Path!);
       if (!di.Exists) yield break;
 
@@ -83,8 +84,8 @@ namespace Taffy.Lib {
           yield return f;
         }
       }
-      _stopwatch.Stop();
-      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] scan all files time elapsed: {_stopwatch.ElapsedMilliseconds}ms");
+      sw.Stop();
+      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] scan all files time elapsed: {sw.ElapsedMilliseconds}ms");
     }
     #endregion
 

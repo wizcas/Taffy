@@ -10,6 +10,6 @@ var monitor = new FolderMonitor(DEBUG_PATH);
 monitor.Scan().Wait();
 
 Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}>\n===== [Test Search] =====\n");
-foreach (var f in monitor.Search("Yellow")) {
+foreach (var f in monitor.Search("mountain")) {
   Console.WriteLine(f.Name);
 }
