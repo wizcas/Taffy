@@ -4,15 +4,7 @@ using System.Diagnostics;
 
 namespace Taffy.Lib {
   public class FolderMonitor {
-
-    string? _path;
-    public string? Path {
-      get => _path;
-      set {
-        _path = value;
-        if (_indexer != null) _indexer.FolderPath = _path;
-      }
-    }
+    public string Path { get; private set; }
     public bool Enable {
       get { return _watcher.EnableRaisingEvents; }
       set { _watcher.EnableRaisingEvents = value; }
@@ -21,11 +13,9 @@ namespace Taffy.Lib {
     readonly FileSystemWatcher _watcher;
 
     readonly Stopwatch _stopwatch = new Stopwatch();
-    FileIndexer _indexer;
 
     public FolderMonitor(string path) {
-      _path = path;
-      _indexer = new FileIndexer(_path);
+      Path = path;
 
       _watcher = new FileSystemWatcher(path, "*.*") {
         IncludeSubdirectories = true,
@@ -49,13 +39,12 @@ namespace Taffy.Lib {
 
       var files = await Task.Run(() => WalkFiles());
       Console.WriteLine($"{files.Count()} files found");
-      using var dir = _indexer.Open();
-      using var writer = _indexer.NewWriter(dir);
+      using var indexer = new FileIndexer(Path);
       foreach (var f in files) {
         var doc = new FileDocument(f);
-        doc.Write(writer);
+        doc.Write(indexer.Writer);
       }
-      writer.Commit();
+      indexer.Commit();
     }
     #endregion
 
