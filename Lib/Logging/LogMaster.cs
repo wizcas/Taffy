@@ -2,12 +2,15 @@
 using System.Diagnostics;
 
 namespace Taffy.Lib.Logging {
-  public static class LogExtensions {
-    static LogExtensions() {
+  public static class LogMaster {
+    static LogMaster() {
       LogManager.Setup().LoadConfiguration(builder => {
         builder.ForLogger().FilterMinLevel(LogLevel.Debug).WriteToConsole();
         //builder.ForLogger().FilterMinLevel(LogLevel.Debug).WriteToFile(fileName: "file.txt");
       });
+    }
+    public static Logger GetLogger() {
+      return LogManager.GetCurrentClassLogger();
     }
     public static PerfContext Perf(this Logger logger, string tag) {
       var context = new PerfContext(Stopwatch.StartNew(), logger, tag);
@@ -28,8 +31,12 @@ namespace Taffy.Lib.Logging {
       Timer.Stop();
     }
 
-    public void Log(string note) {
-      Logger.Info("{what} #{stop}({step}) elapsed: {ms} ms", Tag, _stop++,note,Elapsed.Milliseconds);
+    public void Log(string? stepNote = null) {
+      Logger.Info("[PERF] {what}#{stop} - {$step} elapsed: {ms} ms",
+        Tag,
+        _stop++,
+        string.IsNullOrWhiteSpace(stepNote) ? null : $"({stepNote})",
+        Elapsed.Milliseconds);
     }
   }
 }

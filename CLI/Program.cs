@@ -1,15 +1,23 @@
-﻿using J2N;
+﻿using NLog;
+using System.Text;
 using Taffy.Lib;
+using Taffy.Lib.Logging;
 
+Logger LOG = LogMaster.GetLogger();
 const string DEBUG_PATH = @"K:\creative materials";
 
-// See https://aka.ms/new-console-template for more information
-Console.WriteLine("Hello, World!");
 
+LOG.Info(">>>>> Scan Directories");
 var monitor = new FolderMonitor(DEBUG_PATH);
 monitor.Scan().Wait();
 
-Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}>\n===== [Test Search] =====\n");
+LOG.Info(">>>>> Test Search");
+var sb = new StringBuilder("found files:\n");
+var count = 0;
 foreach (var f in monitor.Search("mountain")) {
-  Console.WriteLine(f.Name);
+  sb.AppendLine($"> {f.Name}");
+  count++;
 }
+sb.Append($"total {count} files match");
+
+LOG.Info(sb.ToString());

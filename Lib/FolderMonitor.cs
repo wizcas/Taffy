@@ -2,12 +2,11 @@
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using NLog;
-using System.Diagnostics;
 using Taffy.Lib.Logging;
 
 namespace Taffy.Lib {
   public class FolderMonitor {
-    readonly static Logger LOG = LogManager.GetCurrentClassLogger();
+    readonly static Logger LOG = LogMaster.GetLogger();
 
     public string Path { get; private set; }
     public bool Enable {
@@ -44,7 +43,7 @@ namespace Taffy.Lib {
       if (Path == null) return;
 
       var files = await Task.Run(() => WalkFiles());
-      Console.WriteLine($"{files.Count()} files found");
+      LOG.Debug("total {count} files are scanned in directory {dir}", files.Count(), Path);
       using var indexer = new FileIndexer(Path, reset: true);
       foreach (var f in files) {
         var doc = new FileDocument(f);
@@ -73,7 +72,7 @@ namespace Taffy.Lib {
 
     #region File system operations
     IEnumerable<FileInfo> WalkFiles() {
-      var sw = Stopwatch.StartNew();
+      using var perf = LOG.Perf($"walk {Path}");
       var di = new DirectoryInfo(Path!);
       if (!di.Exists) yield break;
 
@@ -87,7 +86,7 @@ namespace Taffy.Lib {
           yield return f;
         }
       }
-      sw.Stop();
+      perf.Log();
     }
     #endregion
 
