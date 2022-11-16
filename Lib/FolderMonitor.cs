@@ -1,11 +1,14 @@
-﻿using J2N;
-using Lucene.Net.Documents;
+﻿using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
+using NLog;
 using System.Diagnostics;
+using Taffy.Lib.Logging;
 
 namespace Taffy.Lib {
   public class FolderMonitor {
+    readonly static Logger LOG = LogManager.GetCurrentClassLogger();
+
     public string Path { get; private set; }
     public bool Enable {
       get { return _watcher.EnableRaisingEvents; }
@@ -55,16 +58,16 @@ namespace Taffy.Lib {
       if (!_initialized)
         throw new MonitorNotInitializedException(this);
 
-      var sw = Stopwatch.StartNew();
       var query = new TermQuery(new Term("name", string.Join(" ", terms.Select(t => t.ToLower()))));
+      using var perf = LOG.Perf($"search {query}");
       using var indexer = new FileIndexer(Path);
       var result = indexer.Searcher.Search(query, 20);
       var count = result.TotalHits;
+      perf.Log("search completed");
       for (int i = 0; i < count; i++) {
         yield return new FileInfo(indexer.Searcher.Doc(result.ScoreDocs[i].Doc).Get("fullname"));
       }
-      sw.Stop();
-      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] search for \"{query}\" takes: {sw.ElapsedMilliseconds} ms");
+      perf.Log("file info returned");
     }
     #endregion
 
@@ -85,7 +88,6 @@ namespace Taffy.Lib {
         }
       }
       sw.Stop();
-      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] scan all files time elapsed: {sw.ElapsedMilliseconds}ms");
     }
     #endregion
 
