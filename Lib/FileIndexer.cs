@@ -1,5 +1,7 @@
 ﻿using Lucene.Net.Analysis.Cjk;
+using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
+using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
@@ -19,6 +21,8 @@ namespace Taffy.Lib {
     IndexReader _reader;
     IndexSearcher _searcher;
 
+    QueryParser _nameQueryParser;
+
     internal IndexWriter Writer => _writer;
     internal IndexSearcher Searcher => _searcher;
 
@@ -32,6 +36,8 @@ namespace Taffy.Lib {
       _writer = new IndexWriter(_dir, config);
       _reader = _writer.GetReader(true);
       _searcher = new IndexSearcher(_reader);
+
+      _nameQueryParser = new QueryParser(VER, "name", analyzer);
     }
 
     ~FileIndexer() {
@@ -52,6 +58,11 @@ namespace Taffy.Lib {
 
     public void Commit() {
       Writer.Commit();
+    }
+
+    public Query ParseQuery(params string[] terms) {
+      var query = string.Join(" ", terms);
+      return _nameQueryParser.Parse(query);
     }
   }
 }

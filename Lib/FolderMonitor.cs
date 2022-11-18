@@ -1,5 +1,6 @@
 ﻿using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using NLog;
 using Taffy.Lib.Logging;
@@ -57,10 +58,10 @@ namespace Taffy.Lib {
       if (!_initialized)
         throw new MonitorNotInitializedException(this);
 
-      var query = new TermQuery(new Term("name", string.Join(" ", terms.Select(t => t.ToLower()))));
+      var query = string.Join(" ", terms.Select(t => t.ToLower()));
       using var perf = LOG.Perf($"search {query}");
       using var indexer = new FileIndexer(Path);
-      var result = indexer.Searcher.Search(query, 20);
+      var result = indexer.Searcher.Search(indexer.ParseQuery(query), 20);
       var count = result.TotalHits;
       perf.Log("search completed");
       for (int i = 0; i < count; i++) {
