@@ -1,11 +1,14 @@
-﻿using J2N;
-using Lucene.Net.Documents;
+﻿using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
-using System.Diagnostics;
+using NLog;
+using Taffy.Lib.Logging;
 
 namespace Taffy.Lib {
   public class FolderMonitor {
+    readonly static Logger LOG = LogMaster.GetLogger();
+
     public string Path { get; private set; }
     public bool Enable {
       get { return _watcher.EnableRaisingEvents; }
@@ -41,7 +44,7 @@ namespace Taffy.Lib {
       if (Path == null) return;
 
       var files = await Task.Run(() => WalkFiles());
-      Console.WriteLine($"{files.Count()} files found");
+      LOG.Debug("total {count} files are scanned in directory {dir}", files.Count(), Path);
       using var indexer = new FileIndexer(Path, reset: true);
       foreach (var f in files) {
         var doc = new FileDocument(f);
@@ -55,22 +58,22 @@ namespace Taffy.Lib {
       if (!_initialized)
         throw new MonitorNotInitializedException(this);
 
-      var sw = Stopwatch.StartNew();
-      var query = new TermQuery(new Term("name", string.Join(" ", terms.Select(t => t.ToLower()))));
+      var query = string.Join(" ", terms.Select(t => t.ToLower()));
+      using var perf = LOG.Perf($"search {query}");
       using var indexer = new FileIndexer(Path);
-      var result = indexer.Searcher.Search(query, 20);
+      var result = indexer.Searcher.Search(indexer.ParseQuery(query), 20);
       var count = result.TotalHits;
+      perf.Log("search completed");
       for (int i = 0; i < count; i++) {
         yield return new FileInfo(indexer.Searcher.Doc(result.ScoreDocs[i].Doc).Get("fullname"));
       }
-      sw.Stop();
-      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] search for \"{query}\" takes: {sw.ElapsedMilliseconds} ms");
+      perf.Log("file info returned");
     }
     #endregion
 
     #region File system operations
     IEnumerable<FileInfo> WalkFiles() {
-      var sw = Stopwatch.StartNew();
+      using var perf = LOG.Perf($"walk {Path}");
       var di = new DirectoryInfo(Path!);
       if (!di.Exists) yield break;
 
@@ -84,8 +87,7 @@ namespace Taffy.Lib {
           yield return f;
         }
       }
-      sw.Stop();
-      Console.WriteLine($"<{DateTime.Now.GetMillisecondsSinceUnixEpoch()}> [DEBUG] scan all files time elapsed: {sw.ElapsedMilliseconds}ms");
+      perf.Log();
     }
     #endregion
 
